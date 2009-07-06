@@ -1,0 +1,86 @@
+#!/usr/bin/perl
+
+=head1 NAME
+
+dbedia-cpan-checksums2json - convert information in CHECKSUMS files
+
+=head1 SYNOPSIS
+
+	dbedia-cpan-checksums2json [--mirror-location $PATH1] [--dbedia-location $PATH2]
+
+=head1 DESCRIPTION
+
+=cut
+
+
+use strict;
+use warnings;
+
+use Getopt::Long;
+use Pod::Usage;
+use File::Find::Rule;
+use File::Slurp 'write_file', 'read_file';
+use JSON::XS;
+use File::Basename 'dirname';
+use File::Path 'mkpath';
+use YAML::XS 'Load';
+use File::is;
+
+use FindBin '$Bin';
+
+exit main();
+
+sub main {
+	my $help;
+	my $mirror_location  = File::Spec->catdir($Bin, '..', 'tmp', 'CPAN-mirror');
+	my $dbedia_location  = File::Spec->catdir($Bin, '..', 'tmp', 'dbedia');
+	GetOptions(
+		'help|h'            => \$help,
+		'mirror-location=s' => \$mirror_location,
+		'dbedia-location=s' => \$dbedia_location,
+	) or pod2usage;
+	pod2usage if $help;
+
+	my $json = JSON::XS->new->utf8->pretty(1)->allow_blessed(1);
+	
+	# get list of meta files
+	my @checksums_files = File::Find::Rule
+		->file()
+		->name( 'CHECKSUMS' )
+		->in( $mirror_location )
+	;
+	
+	# loop through meta files
+	my %hash_list;
+	foreach my $checksums_filename (@checksums_files) {
+		my $cksum; eval(scalar read_file($checksums_filename));
+		if (ref $cksum ne 'HASH') {
+			warn '"'.$checksums_filename.'" has unsupported format ('.$@.')';
+			next;
+		}
+		
+		my $checksums_folder = $checksums_filename;
+		$checksums_folder    =~ s{^$mirror_location.(.+)$}{$1};
+		$checksums_folder    = dirname($checksums_folder);
+		
+		foreach my $filename (keys %{$cksum}) {
+			# skip meta files
+			next if $filename =~ m/\.meta$/;
+			
+			my $entry = $cksum->{$filename};
+			
+			$hash_list{'SHA256'}->{$entry->{'sha256'}} = { 'file_name' => $filename, 'folder' => $checksums_folder }
+				if $entry->{'sha256'};
+			$hash_list{'MD5'}->{$entry->{'md5'}} = { 'file_name' => $filename, 'folder' => $checksums_folder }
+				if $entry->{'md5'};
+		}
+	}
+	
+	# write lists of hashes
+	foreach my $hash_alg (keys %hash_list) {
+		my $hash_filename = File::Spec->catfile($dbedia_location, 'fileHashes'.$hash_alg.'.json');
+		write_file($hash_filename, $json->encode($hash_list{$hash_alg}));
+	}
+	
+	return 0;
+}

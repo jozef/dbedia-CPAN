@@ -1,0 +1,81 @@
+#!/usr/bin/perl
+
+=head1 NAME
+
+dbedia-cpan-provides - convert provides information in 02packages.details.txt.gz
+
+=head1 SYNOPSIS
+
+	dbedia-cpan-provides [--dbedia-location $PATH2]
+
+=head1 DESCRIPTION
+
+=cut
+
+
+use strict;
+use warnings;
+
+use Getopt::Long;
+use Pod::Usage;
+use File::Find::Rule;
+use File::Slurp 'write_file', 'read_file';
+use JSON::XS;
+use File::Basename 'dirname';
+use File::Path 'mkpath';
+use YAML::XS 'Load';
+use File::is;
+use Parse::CPAN::Packages;
+use dbedia;
+
+use FindBin '$Bin';
+
+exit main();
+
+sub main {
+	my $help;
+	my $mirror_location  = File::Spec->catdir($Bin, '..', 'tmp', 'CPAN-mirror');
+	my $dbedia_location  = File::Spec->catdir($Bin, '..', 'tmp', 'dbedia');
+	GetOptions(
+		'help|h'            => \$help,
+		'mirror-location=s' => \$mirror_location,
+		'dbedia-location=s' => \$dbedia_location,
+	) or pod2usage;
+	pod2usage if $help;
+
+	my $json = JSON::XS->new->utf8->pretty(1)->convert_blessed(1);
+	my $dbedia = dbedia->new('base_uri' => 'http://dbedia.com/CPAN');
+	my $distributions = $json->decode(scalar read_file(File::Spec->catfile($dbedia_location, 'packagesDetails.json')));
+	my $provides_filename = File::Spec->catfile($dbedia_location, 'provides.json');
+	
+	# get provides from dbedia.com
+	my %provides = eval { %{$dbedia->get('provides.json')} };
+	# merge with local file
+	merge_provides(\%provides, $json->decode(scalar read_file($provides_filename)))
+		if -e $provides_filename;
+	
+	foreach my $dist (@$distributions) {
+		foreach my $pkg (@{$dist->{'packages'}}) {
+			$provides{$pkg->{'package'}}->{$pkg->{'version'}} = {
+				'file_name' => $dist->{'filename'},
+				'folder' => File::Spec->catdir('authors', 'id', dirname($dist->{'prefix'})),
+			};
+		}
+	}
+	write_file($provides_filename, $json->encode(\%provides));
+	
+	return 0;
+}
+
+sub merge_provides {
+	my $provides1 = shift;
+	my $provides2 = shift;
+	
+	foreach my $package (keys %{$provides2}) {
+		foreach my $version (keys %{$provides2->{$package}}) {
+			$provides1->{$package}->{$version} = $provides2->{$package}->{$version};
+		}
+	}
+	
+	return $provides1;
+}

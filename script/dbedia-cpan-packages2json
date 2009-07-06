@@ -1,0 +1,69 @@
+#!/usr/bin/perl
+
+=head1 NAME
+
+dbedia-cpan-packages2json - convert information in CHECKSUMS files
+
+=head1 SYNOPSIS
+
+	dbedia-cpan-packages2json [--mirror-location $PATH1] [--dbedia-location $PATH2]
+
+=head1 DESCRIPTION
+
+=cut
+
+
+use strict;
+use warnings;
+
+use Getopt::Long;
+use Pod::Usage;
+use File::Find::Rule;
+use File::Slurp 'write_file', 'read_file';
+use JSON::XS;
+use File::Basename 'dirname';
+use File::Path 'mkpath';
+use YAML::XS 'Load';
+use File::is;
+use Parse::CPAN::Packages;
+
+use FindBin '$Bin';
+
+exit main();
+
+sub main {
+	my $help;
+	my $mirror_location  = File::Spec->catdir($Bin, '..', 'tmp', 'CPAN-mirror');
+	my $dbedia_location  = File::Spec->catdir($Bin, '..', 'tmp', 'dbedia');
+	GetOptions(
+		'help|h'            => \$help,
+		'mirror-location=s' => \$mirror_location,
+		'dbedia-location=s' => \$dbedia_location,
+	) or pod2usage;
+	pod2usage if $help;
+
+	my $json = JSON::XS->new->utf8->pretty(1)->convert_blessed(1);
+	my $packages = Parse::CPAN::Packages->new(File::Spec->catfile($mirror_location, 'modules', '02packages.details.txt.gz'));
+	my $packageslist_location = File::Spec->catfile($dbedia_location, 'packagesDetails.json');
+	
+	write_file($packageslist_location, $json->encode([ $packages->distributions ]));
+	
+	return 0;
+}
+
+package Parse::CPAN::Packages::Distribution;
+sub TO_JSON {
+	my $self = shift;		
+	my %hash = map { $_ => $self->$_ } keys %{$self};
+	return \%hash;
+}
+1;
+
+package Parse::CPAN::Packages::Package;
+sub TO_JSON {
+	my $self = shift;
+	my %hash = map { $_ => $self->$_ } keys %{$self};
+	delete $hash{'distribution'};
+	return \%hash;
+}
+1;
