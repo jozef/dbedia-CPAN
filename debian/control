@@ -1,0 +1,13 @@
+Source: dbedia-cpan
+Section: web
+Priority: optional
+Maintainer: Jozef Kutej <jozef@kutej.net>
+Build-Depends: debhelper (>= 4.0.0), fakeroot
+Standards-Version: 3.6.1
+
+Package: dbedia-cpan
+Architecture: all
+Depends: 
+Recommends: dbedia
+Description: CPAN data in dbedia
+ static files

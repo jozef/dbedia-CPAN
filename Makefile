@@ -1,6 +1,7 @@
 
 MIRROR=tmp/CPAN-mirror
 WWW_FOLDER=tmp/dbedia
+LOCATIONS=--mirror-location=${MIRROR} --dbedia-location=${WWW_FOLDER}
 
 # ALL
 .PHONY: all
@@ -11,17 +12,24 @@ update:
 	touch ${MIRROR}/update-heartbeat
 	if [ ${MIRROR}/update-heartbeat -nt ${MIRROR}/update-next ]; then \
 		rsync -avm --del --include="*.meta" --include "CHECKSUMS" --include "01mailrc.txt.gz" --include "02packages.details.txt.gz" --include='*/' --exclude='*' gd.tuwien.ac.at::CPAN/ ${MIRROR}/; \
-		script/dbedia-cpan-meta2json; \
-		script/dbedia-cpan-checksums2json; \
+		script/dbedia-cpan-meta2json ${LOCATIONS}; \
+		script/dbedia-cpan-checksums2json ${LOCATIONS}; \
 		touch --date "12h" ${MIRROR}/update-next; \
 	fi
 
 ${WWW_FOLDER}/packagesDetails.json: ${MIRROR}/modules/02packages.details.txt.gz
-	script/dbedia-cpan-packages2json
+	script/dbedia-cpan-packages2json ${LOCATIONS}
 
 ${WWW_FOLDER}/provides.json: ${WWW_FOLDER}/packagesDetails.json
-	script/dbedia-cpan-provides
+	script/dbedia-cpan-provides ${LOCATIONS}
 
+# install
+.PHONY: install
+install: all
+	mkdir -p ${DESTDIR}/var/www/dbedia-CPAN
+	cp -r ${WWW_FOLDER}/* ${DESTDIR}/var/www/dbedia-CPAN/
+	mkdir -p ${DESTDIR}/etc/dbedia/sites-available
+	cp etc/dbedia-CPAN.conf ${DESTDIR}/etc/dbedia/sites-available/
 
 # create debian package
 .PHONY: deb
@@ -31,7 +39,10 @@ deb: all
 # CLEAN
 .PHONY: clean distclean
 clean:
-	rm -f ${MIRROR}/update
+	fakeroot debian/rules clean
+	rm -rf ${WWW_FOLDER}
 
 distclean:
-	rm -rf mirror/*
+	rm -rf ${WWW_FOLDER}
+	rm -rf ${MIRROR}
+	fakeroot debian/rules clean
