@@ -34,8 +34,9 @@ exit main();
 
 sub main {
 	my $help;
-	my $mirror_location  = File::Spec->catdir($Bin, '..', 'tmp', 'CPAN-mirror');
-	my $dbedia_location  = File::Spec->catdir($Bin, '..', 'tmp', 'dbedia');
+	my $mirror_location = File::Spec->catdir($Bin, '..', 'tmp', 'CPAN-mirror');
+	my $dbedia_location = File::Spec->catdir($Bin, '..', 'tmp', 'dbedia');
+	my $tmp_location    = File::Spec->catdir($Bin, '..', 'tmp');
 	GetOptions(
 		'help|h'            => \$help,
 		'mirror-location=s' => \$mirror_location,
@@ -44,15 +45,17 @@ sub main {
 	pod2usage if $help;
 
 	my $json = JSON::XS->new->utf8->pretty(1)->convert_blessed(1);
-	my $dbedia = dbedia->new('base_uri' => 'http://dbedia.com/CPAN/');
-	my $distributions = $json->decode(scalar read_file(File::Spec->catfile($dbedia_location, 'packagesDetails.json')));
+	my $dbedia       = dbedia->new('base_uri' => 'http://dbedia.com/CPAN/');
+	my $dbedia_local = dbedia->new('base_uri' => 'file://'.File::Spec->rel2abs($dbedia_location).'/', 'ttl' => 0);
+	my $distributions = $dbedia_local->get('packagesDetails.json.gz');
 	my $provides_filename = File::Spec->catfile($dbedia_location, 'provides.json');
-	
+	my $tmp_provides_filename = File::Spec->catfile($tmp_location, 'provides.json');
+
 	# get provides from dbedia.com
-	my %provides = eval { %{$dbedia->get('provides.json')} };
+	my %provides = eval { %{$dbedia->get('provides.json.gz')} };
 	# merge with local file
-	merge_provides(\%provides, $json->decode(scalar read_file($provides_filename)))
-		if -e $provides_filename;
+	merge_provides(\%provides, $json->decode(scalar read_file($tmp_provides_filename)))
+		if -e $tmp_provides_filename;
 	
 	foreach my $dist (@$distributions) {
 		foreach my $pkg (@{$dist->{'packages'}}) {
@@ -63,6 +66,7 @@ sub main {
 		}
 	}
 	write_file($provides_filename, $json->encode(\%provides));
+	write_file($tmp_provides_filename, $json->encode(\%provides));
 	
 	return 0;
 }
