@@ -44,9 +44,23 @@ sub main {
 
 	my $json = JSON::XS->new->utf8->pretty(1)->convert_blessed(1);
 	my $packages = Parse::CPAN::Packages->new(File::Spec->catfile($mirror_location, 'modules', '02packages.details.txt.gz'));
-	my $packageslist_location = File::Spec->catfile($dbedia_location, 'packagesDetails.json');
+	my $packagesdetails_location = File::Spec->catfile($dbedia_location, 'packagesDetails.json');
+	my $package2tarball = File::Spec->catfile($dbedia_location, 'package2tarball.json');
 	
-	write_file($packageslist_location, $json->encode([ $packages->distributions ]));
+	write_file($packagesdetails_location, $json->encode([ $packages->distributions ]));
+	
+	# create package to tarball mapping
+	write_file($package2tarball, $json->encode({
+		map {
+			my $distribution = $_;
+			my $tarball = $distribution->prefix;
+			map {
+				$_->package => $tarball;
+			}
+			@{$distribution->packages}
+		}
+		$packages->distributions
+	}));
 	
 	return 0;
 }
