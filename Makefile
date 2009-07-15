@@ -5,7 +5,7 @@ LOCATIONS=--mirror-location=${MIRROR} --dbedia-location=${WWW_FOLDER}
 
 # ALL
 .PHONY: all
-all: update ${WWW_FOLDER}/packagesDetails.json ${WWW_FOLDER}/provides.json
+all: update ${WWW_FOLDER}/packagesDetails.json.gz ${WWW_FOLDER}/provides.json.gz
 
 .PHONY: update
 update:
@@ -43,6 +43,7 @@ deb: all
 # CLEAN
 .PHONY: clean distclean
 clean:
+	touch ${MIRROR}/update-next
 	fakeroot debian/rules clean
 	rm -rf ${WWW_FOLDER}
 
